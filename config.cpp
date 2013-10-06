@@ -20,8 +20,8 @@ the following restrictions:
     3. This notice may not be removed or altered from any source distribution.
 */
 
-#include "../_sdk/foobar2000/SDK/foobar2000.h"
-#include "../_sdk/foobar2000/helpers/helpers.h"
+#include "../foobar2000/SDK/foobar2000.h"
+#include "../foobar2000/helpers/helpers.h"
 #include "resource.h"
 
 extern	cfg_string cfg_format;

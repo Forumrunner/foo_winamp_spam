@@ -22,17 +22,19 @@ the following restrictions:
 
 #define UNICODE 1
 
-#include "../_sdk/foobar2000/SDK/foobar2000.h"
-#include "../_sdk/foobar2000/helpers/helpers.h"
+#include "../foobar2000/SDK/foobar2000.h"
+#include "../foobar2000/helpers/helpers.h"
 #include "winamp.h"
 
-#define VERSION ("0.96")
+#define VERSION ("0.99")
 
 DECLARE_COMPONENT_VERSION ("Winamp API Emulator",
 	VERSION,
 	"Emulates the Winamp API, making Foobar compatible with sofware written for Winamp\n"
 	"Original (till v0.90) by R1CH (www.r1ch.net)\n"
-	"Sice v0.91 maintained by Chronial (Christian Fersch)");
+	"v0.91 - v0.96 maintained by Chronial (Christian Fersch)\n"
+	"v0.97 - v0.98 maintained by selyb@thefamilycirc.us\n"
+	"Since v0.99 maintained by Raziel (raziely@gmail.com)");
 
 
 // {1D3BB858-26FA-4a70-ADB0-6EB567B32576}
@@ -74,19 +76,35 @@ pfc::string8 winampPath;
 
 //metadb_handle *fb2kCurrentSongHandle = NULL;
 
+//need a proper conversion function as the PFC one does not seem to produce the desired results
+std::wstring Utf8ToUtf16(const std::string &s)
+{
+	std::wstring ret;
+	int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), s.length(), NULL, 0);
+	if (len > 0)
+	{
+		ret.resize(len);
+		MultiByteToWideChar(CP_UTF8, 0, s.c_str(), s.length(), const_cast<wchar_t*>(ret.c_str()), len);
+	}
+	return ret;
+}
+
 void UpdateFakeWindowTitle (pfc::string8 trackTitle)
 {
-//	wchar_t	out[1024];
-
 	fb2kFakeWindowTitle.set_string ("");
 	fb2kFakeWindowTitle.add_string (trackNumber.get_ptr());
 	fb2kFakeWindowTitle.add_string (". ");
 	fb2kFakeWindowTitle.add_string (trackTitle.get_ptr());
 	fb2kFakeWindowTitle.add_string (" - Winamp");
 
-	//pfc::stringcvt::convert_utf8_to_wide (out, sizeof(out), fb2kFakeWindowTitle, fb2kFakeWindowTitle.get_length());
-
-	uSetWindowText (hwndMain, fb2kFakeWindowTitle);
+	std::string outString8 = fb2kFakeWindowTitle.toString();
+	std::wstring outString16 = Utf8ToUtf16(outString8);
+	if (outString16.length()) {
+		SetWindowTextW (hwndMain, outString16.c_str());
+	} else {
+		SetWindowTextW(hwndMain,L"0. Set Title Failed - Winamp"); //fake a winamp-format title even on failure to avoid crashing whatever tries to read it
+		console::error("UTF16 conversion failed");
+	}
 }
 
 void checkWinampPath(){
@@ -191,15 +209,13 @@ public:
 		//p_info.copy_meta
 		static_api_ptr_t<play_control> pc;
 		service_ptr_t<titleformat_object> script;
-		if (static_api_ptr_t<titleformat_compiler>()->compile (script, cfg_format.get_ptr()))
-		{
+		if (static_api_ptr_t<titleformat_compiler>()->compile (script, cfg_format.get_ptr())) {
 			metadb_handle_ptr meta;
-			if (pc->get_now_playing (meta))
-			{
+			if (pc->get_now_playing (meta))	{
 				pc->playback_format_title_ex(meta, NULL, fb2kSongTitle, script, NULL, play_control::display_level_titles);
-			}
-			else
+			} else {
 				fb2kSongTitle.set_string (p_info.meta_get ("Title", 0));
+			}
 		}
 		UpdateFakeWindowTitle (fb2kSongTitle);
 	}
@@ -230,26 +246,31 @@ public:
 			trackNumber.set_string ("0");
 
 		metadb->metadb_lock();
-		const file_info * info;
-		if (metadb->get_info_locked (info)){
-
+		const file_info *info;
+		
+		if (metadb->get_info_locked (info)) {
 			fb2kTotalLength = (int)metadb->get_length ();
 			fb2kKbps = (int)info->info_get_int ("bitrate");
 			fb2kKhz = (int)info->info_get_int ("samplerate");
 			fb2kNumChans = (int)info->info_get_int ("channels");
 			loadRating(info);
-
-
-			strncpy (fb2kFakeSongPath, metadb->get_path(), sizeof(fb2kFakeSongPath)-1);
+		} else {
+			fb2kTotalLength = 0;
+			fb2kKbps = 0;
+			fb2kKhz = 0;
+			fb2kRating = 0;
 		}
 		metadb->metadb_unlock();
+
+		strncpy (fb2kFakeSongPath, metadb->get_path(), sizeof(fb2kFakeSongPath)-1);
+
 		UpdateFakeWindowTitle(fb2kSongTitle);
 	}
 
 	void doregister (void)
 	{
 		static_api_ptr_t<play_callback_manager> pcm;
-		pcm->register_callback(this, flag_on_playback_new_track | flag_on_playback_dynamic_info | flag_on_playback_dynamic_info_track | flag_on_playback_stop | flag_on_playback_starting, false);
+		pcm->register_callback(this, flag_on_playback_new_track | flag_on_playback_dynamic_info | flag_on_playback_dynamic_info_track | flag_on_playback_stop | flag_on_playback_starting | flag_on_playback_pause, false);
 	}
 
 	void dounregister (void)
@@ -523,24 +544,30 @@ LRESULT CALLBACK WndProcMain(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 		case WM_COMMAND:
 			switch(wParam)
 			{
+			//Play
 			case WINAMP_BUTTON2:
 				//play_control::get()->play_start();
 				standard_commands::main_play ();
 				break;
 
+			//Open File Dialog
 			case WINAMP_BUTTON2_SHIFT:
 				standard_commands::main_add_files();
 				break;
 
+			//Open URL
 			case WINAMP_BUTTON2_CTRL:
 				standard_commands::main_add_location();
 				break;
 
+			//Stop
 			case WINAMP_BUTTON4:
+			//Fadeout and stop
 			case WINAMP_BUTTON4_SHIFT: //Stop with fade-out, default in foobar
 				standard_commands::main_stop ();
 				break;
 
+			//Stop after current
 			case WINAMP_BUTTON4_CTRL:
 				//play_control::get()->toggle_stop_after_current ();
 				{
@@ -549,31 +576,27 @@ LRESULT CALLBACK WndProcMain(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				}
 				break;
 
+			//Pause/Unpause
 			case WINAMP_BUTTON3:
 			case WINAMP_BUTTON3_SHIFT:
 			case WINAMP_BUTTON3_CTRL:
 				//standard_commands::main_play_or_pause ();
 				{
 					static_api_ptr_t<playback_control> pc;
-					pc->pause(true);
-					//pc->play_or_pause();
+					//pc->pause(true);
+					pc->play_or_pause();
 					//console::printf("time: %d",(int)(pc->playback_get_position()*1000));
 				}
 				break;
 
+			//Next track
 			case WINAMP_BUTTON5:
 				//play_control::get()->play_start (play_control::TRACK_COMMAND_NEXT);
 				standard_commands::main_next ();
 				break;
 
+			//End of playlist
 			case WINAMP_BUTTON5_CTRL:
-				{
-					static_api_ptr_t<playback_control> pc;
-					pc->playback_seek_delta(5);
-				}
-				break;
-
-			case WINAMP_BUTTON5_SHIFT:
 				{
 					static_api_ptr_t<playlist_manager> pm;
 					t_size pl = pm->get_playing_playlist();
@@ -582,23 +605,38 @@ LRESULT CALLBACK WndProcMain(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				}
 				break;
 
+			// fast forwards 5 seconds
+			case WINAMP_FFWD5S:
+			// Duplicate of WINAMP_FFWD5S
+			case WINAMP_BUTTON5_SHIFT:
+				{
+					static_api_ptr_t<playback_control> pc;
+					pc->playback_seek_delta(5);
+				}
+				break;
+
+			// Previous track button
 			case WINAMP_BUTTON1:
 				//play_control::get()->play_start (play_control::TRACK_COMMAND_PREV);
 				standard_commands::main_previous ();
 				break;
 
+			// Start of playlist
 			case WINAMP_BUTTON1_CTRL:
-				{
-					static_api_ptr_t<playback_control> pc;
-					pc->playback_seek_delta(-5);
-				}
-				break;
-
-			case WINAMP_BUTTON1_SHIFT:
 				{
 					static_api_ptr_t<playlist_manager> pm;
 					t_size pl = pm->get_playing_playlist();
 					pm->playlist_execute_default_action(pl,0);
+				}
+				break;
+
+			// rewinds 5 seconds
+			case WINAMP_REW5S:
+			// Duplicate of WINAMP_REW5S
+			case WINAMP_BUTTON1_SHIFT:
+				{
+					static_api_ptr_t<playback_control> pc;
+					pc->playback_seek_delta(-5);
 				}
 				break;
 
@@ -669,7 +707,7 @@ LRESULT CALLBACK WndProcMain(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 			break;
 	}
 
-	return DefWindowProcA (hwnd, message, wParam, lParam);;
+	return DefWindowProcW (hwnd, message, wParam, lParam);;
 }
 
 class foo_winamp_spam_initquit : public initquit
@@ -680,7 +718,7 @@ public:
 		if (cfg_playlist)
 			checkWinampPath();
 
-		WNDCLASSA wcex;
+		WNDCLASSW wcex;
 
 		wcex.style			= CS_HREDRAW | CS_VREDRAW;
 		wcex.lpfnWndProc	= (WNDPROC)WndProcMain;
@@ -691,11 +729,11 @@ public:
 		wcex.hCursor		= LoadCursor (core_api::get_my_instance(), MAKEINTRESOURCE(32512));
 		wcex.hbrBackground	= (HBRUSH)(COLOR_WINDOW+1);
 		wcex.lpszMenuName	= NULL;
-		wcex.lpszClassName	= "Winamp v1.x";
+		wcex.lpszClassName	= L"Winamp v1.x";
 
-		RegisterClassA (&wcex);
+		RegisterClassW (&wcex);
 
-		hwndMain = uCreateWindowEx (0, "Winamp v1.x", "Winamp v1.x", WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 110, 110, 510, 110, NULL, NULL, core_api::get_my_instance(), NULL);
+		hwndMain = CreateWindowExW (0, L"Winamp v1.x", L"Winamp v1.x", WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 110, 110, 510, 110, NULL, NULL, core_api::get_my_instance(), NULL);
 
 		winampspam.doregister ();
 	}

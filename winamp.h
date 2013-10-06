@@ -1,6 +1,3 @@
-// This file is only here for reference and is not built!
-
-
 /*
 ** Copyright (C) 2006 Nullsoft, Inc.
 **
@@ -1623,21 +1620,22 @@ typedef struct {
 // the following are the five main control buttons, with optionally shift 
 // or control pressed
 // (for the exact functions of each, just try it out)
-#define WINAMP_BUTTON1                  40044
-#define WINAMP_BUTTON2                  40045
-#define WINAMP_BUTTON3                  40046
-#define WINAMP_BUTTON4                  40047
-#define WINAMP_BUTTON5                  40048
-#define WINAMP_BUTTON1_SHIFT            40144
-#define WINAMP_BUTTON2_SHIFT            40145
+//************ comments added by selyb *******************************
+#define WINAMP_BUTTON1                  40044 // Previous track button
+#define WINAMP_BUTTON2                  40045 // Play button
+#define WINAMP_BUTTON3                  40046 // (un)Pause button
+#define WINAMP_BUTTON4                  40047 // Stop button
+#define WINAMP_BUTTON5                  40048 // Next track button
+#define WINAMP_BUTTON1_SHIFT            40144 // Duplicate of WINAMP_REW5S
+#define WINAMP_BUTTON2_SHIFT            40145 // (Open File Dialog (duplicate of 40029))
 #define WINAMP_BUTTON3_SHIFT            40146
-#define WINAMP_BUTTON4_SHIFT            40147
-#define WINAMP_BUTTON5_SHIFT            40148
-#define WINAMP_BUTTON1_CTRL             40154
-#define WINAMP_BUTTON2_CTRL             40155
+#define WINAMP_BUTTON4_SHIFT            40147 // Fadeout and stop
+#define WINAMP_BUTTON5_SHIFT            40148 // Duplicate of WINAMP_FFWD5S
+#define WINAMP_BUTTON1_CTRL             40154 // Start of playlist
+#define WINAMP_BUTTON2_CTRL             40155 // Open URL
 #define WINAMP_BUTTON3_CTRL             40156
-#define WINAMP_BUTTON4_CTRL             40157
-#define WINAMP_BUTTON5_CTRL             40158
+#define WINAMP_BUTTON4_CTRL             40157 // Stop after current
+#define WINAMP_BUTTON5_CTRL             40158 // End of playlist
 
 #define WINAMP_FILE_PLAY                40029 // pops up the load file(s) box
 #define WINAMP_OPTIONS_PREFS            40012 // pops up the preferences
