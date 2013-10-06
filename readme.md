@@ -23,6 +23,7 @@ Version v0.97
 
 Download
 --------
+From github's releases section (https://github.com/RazielZ/foo_winamp_spam/releases/download/v0.99/foo_winamp_spam.fb2k-component)
 
 Installation
 ------------
